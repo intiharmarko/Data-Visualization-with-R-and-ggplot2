@@ -1,0 +1,614 @@
+---
+title: "Diamonds"
+author: "Marko Intihar"
+date: "06/03/2020"
+output: 
+  html_document:
+    css: template1.css
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+---
+
+# Introduction
+
+This report covers inspection of the **diamonds dataset** from the **ggplot2** library. The content covers:
+
+* quick dataset exploration
+* exploratory data analysis
+* diamond price prediction modelling
+
+
+# The Dataset
+
+```{r data, echo=FALSE, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cowplot)
+library(hexbin)
+
+library(kableExtra)
+
+# Load data (complete path to the file!!!)
+load("C:/Users/Marko/Desktop/project/data/diamonds.RData")
+
+
+```
+
+First look into the dataset (summary, structure,...):
+```{r data look, echo=TRUE, include=TRUE}
+# structure
+str(diamonds.big)
+
+# summary
+summary(diamonds.big)
+
+# data frame dimensions
+rows <- nrow(diamonds.big)
+cols <- ncol(diamonds.big)
+
+# pre-look
+head(diamonds.big)
+
+```
+
+Data frame consists of `r cols` variables or columns and `r rows` measurements or rows (different diamonds).
+
+Our goal is to explore each variable and connection between variables in order to understand the data behind the diamonds and we would like to build a model for diamond price prediction based on diamond measurements.
+
+
+# Exploratory Data Analysis (EDA)
+
+In this report we try to explore the given diamonds dataset. By considering:
+
+* each individual variable;
+* two variables and their connection;
+* many variables;
+
+
+## Explore each individual variable
+
+Diamond **carat** is presented with a continuous variable. The value indicates the weight of each diamond in carats (*ct*) that is equal to 200 *mg*. The variable distribution is presented on the figure below. As we can see there are several spiked values at certain value of carats that indicate a large number of diamonds with similar weight.
+
+```{r carat, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+diamonds.big %>% 
+  ggplot(aes(x = carat)) +
+  geom_dotplot(binwidth = 0.001, stackdir = "up", color = "gray20") +
+  scale_x_continuous(breaks = seq(0,5,0.25)) +
+  scale_y_continuous(breaks = seq(0,1,0.1)) +
+  ggtitle("Diamond carat - dotplot") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"))
+```
+
+Diamond price is given in USD. The variable **price** is presented with an exponential distribution with large number of diamonds with lower prices and small number of diamonds with higher prices. We can see a larger number of diamonds with price a bit lower than 5000 USD as expected.
+
+
+
+```{r price, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+diamonds.big %>% 
+  ggplot(aes(x = price)) +
+  geom_histogram(binwidth = 100, color = "black", fill = "deepskyblue3") +
+  xlab("Price (in USD)") +
+  ylab("Frequency") +
+  scale_x_continuous(breaks = seq(0,20000,2500)) +
+  scale_y_continuous(breaks = seq(0,3000,500)) +
+  ggtitle("Diamond price - histogram") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"))
+```
+
+Diamond's dimensions are given with the following variables:
+
+* **x** - length in *mm*
+* **y** - width in *mm*
+* **z** - depth in *mm*
+
+Figure below shows the distribution of each dimension variable.
+
+```{r xyz, fig.align='center', fig.width=12, fig.height=12, fig.show='asis', echo=FALSE, warning=FALSE}
+fig.x <- diamonds.big %>% 
+  filter(x > 3.5) %>% 
+  ggplot(aes(x = x)) +
+  geom_freqpoly(binwidth = 0.05, size = 1.2, color = "black") +
+  scale_x_continuous(breaks = seq(0,10,0.5), limits = c(0,10)) +
+  xlab("") +
+  ylab("Count") +
+  ggtitle("Diamond dimensions (in mm) - frequency plots") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+fig.y <- diamonds.big %>% 
+  filter(y > 3.5 & y < 15) %>% 
+  ggplot(aes(x = y)) +
+  geom_freqpoly(binwidth = 0.05, size = 1.2, color = "gray40") +
+  scale_x_continuous(breaks = seq(0,10,0.5), limits = c(0,10)) +
+  xlab("") +
+  ylab("Count") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16))
+
+fig.z <- diamonds.big %>% 
+  filter(z > 2 & z < 15) %>% 
+  ggplot(aes(x = z)) +
+  geom_freqpoly(binwidth = 0.05, size = 1.2, color = "gray60") +
+  scale_x_continuous(breaks = seq(0,10,0.5), limits = c(0,10)) +
+  xlab("") +
+  ylab("Count") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16))
+
+cowplot::plot_grid(fig.x, fig.y, fig.z, ncol = 1, labels = c("X", "Y", "Z"), label_size = 25)
+
+```
+
+The last two continuous variables in the dataset are *depth* and *table*. Depth is calculated as total depth percentage:
+
+$$z = \frac{2z}{x+y}$$
+
+Table is the ratio (in percentage) between width of top of diamond relative to widest point. The figure below shows depth and width variable distribution.
+
+```{r tabledepth, fig.align='center', fig.width=12, fig.height=10, fig.show='asis', echo=FALSE}
+
+fig.depth <- diamonds.big %>% 
+  ggplot(aes(x = depth)) +
+  geom_area(stat = "bin", binwidth = 0.1, color = "black", fill = "gray") +
+  scale_x_continuous(breaks = seq(20, 100, 5)) +
+  scale_y_continuous(breaks = seq(0,3000,250)) +
+  xlab("Depth") +
+  ylab("Frequency") +
+  ggtitle("Diamond depth - area plot") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+fig.table <- diamonds.big %>% 
+  ggplot(aes(x = table)) +
+  geom_area(stat = "bin", binwidth = 1, color = "black", fill = "gray") +
+  scale_x_continuous(breaks = seq(20, 100, 5)) +
+  scale_y_continuous(breaks = seq(0,10000,1000)) +
+  xlab("Table") +
+  ylab("Frequency") +
+  ggtitle("Diamond table - area plot") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+cowplot::plot_grid(fig.depth, fig.table, ncol = 1)
+```
+
+The dataset includes three different discrete variables:
+
+* diamond **cut** (quality of the diamond cut from *Fair* to *Good*)
+* diamond **color** (diamond color from *J* as worst color to *D* as best color)
+* diamond **clarity** (measurement of how clear the diamond is from *I1* as worst and *IF* as best)
+
+Barplots below show the distribution for each discrete variable (all possbile values).
+
+```{r ccc, fig.align='center', fig.width=12, fig.height=12, fig.show='asis', echo=FALSE}
+
+fig.cut <- diamonds.big %>% 
+  ggplot(aes(x = cut)) +
+  geom_bar(stat = "count", fill = "gray60", color = "black") +
+  scale_y_continuous(breaks = seq(0,25000,5000)) +
+  xlab("Diamond cut") +
+  ylab("Frequency") +
+  ggtitle("Diamond cut / color / clarity - bar plot") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+fig.color <- diamonds.big %>% 
+  ggplot(aes(x = color)) +
+  geom_bar(stat = "count", fill = "gray60", color = "black") +
+  scale_y_continuous(breaks = seq(0,15000,2500)) +
+  xlab("Diamond color") +
+  ylab("Frequency") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+fig.clarity <- diamonds.big %>% 
+  ggplot(aes(x = clarity)) +
+  geom_bar(stat = "count", fill = "gray60", color = "black") +
+  scale_y_continuous(breaks = seq(0,15000,2500)) +
+  xlab("Diamond clarity") +
+  ylab("Frequency") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+cowplot::plot_grid(fig.cut, fig.color, fig.clarity, ncol = 1)
+```
+
+
+
+## Explore two variables
+
+In this part we will compare selected variables with diamond price, here we will use different plotting techniques.
+
+First let's compare diamond carat with diamond price using scatterplot. As you can see from the figure, price variability is incresed when we increase the value of the carat.
+
+```{r pricecarat, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+
+diamonds.big %>% 
+  ggplot(aes(x = carat, y = price)) +
+  geom_point(position = "jitter",
+             color = "black",
+             alpha = 1/10,
+             size = 1.5) +
+  scale_x_continuous(breaks = seq(0,5,0.5)) +
+  scale_y_continuous(breaks = seq(0,20000,2500)) +
+  xlab("Carat") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price VS carat - scatterplot") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.5))
+
+```
+
+The following three figures show each dimension variable with diamond price. First we compare diamond length with diamond price usin heatmap (bin count).
+
+```{r pricex, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+
+diamonds.big %>% 
+  ggplot(aes(x = x, y = price)) +
+  geom_bin2d(binwidth = c(0.1,200)) +
+  scale_x_continuous(breaks = seq(0,20,1)) +
+  scale_y_continuous(breaks = seq(0,20000,5000)) +
+  scale_fill_viridis_c() +
+  xlab("Diamond length (in mm)") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price VS diamond length - heatmap 2D bin count") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        legend.text = element_text(size = 14),
+        legend.title = element_text(size = 18),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2))
+
+```
+
+The second depicts conncetion between price and diamond width using 2 dimensional density plot.
+
+```{r pricey, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+
+diamonds.big %>% 
+  ggplot(aes(x = y, y = price)) +
+  stat_density_2d(aes(fill = stat(level)), geom = "polygon") +
+  scale_x_continuous(breaks = seq(0,20,0.5)) +
+  scale_y_continuous(breaks = seq(0,20000,1000)) +
+  scale_fill_viridis_c(option = "plasma") +
+  xlab("Diamond width (in mm)") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price VS diamond width - 2D density plot") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        legend.text = element_text(size = 14),
+        legend.title = element_text(size = 18),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2))
+
+```
+
+The last of three shows connection between price and diamond depth using hexagonal heatmap.
+
+```{r pricez, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+
+diamonds.big %>% 
+  filter(z <= 10) %>% 
+  ggplot(aes(x = z, y = price)) +
+  geom_hex(binwidth = c(0.05,250)) +
+  scale_x_continuous(breaks = seq(0,10,1)) +
+  scale_y_continuous(breaks = seq(0,20000,5000)) +
+  scale_fill_viridis_c(option = "viridis") +
+  xlab("Diamond depth (in mm)") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price VS diamond length - Hexagonal heatmap 2D") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        legend.text = element_text(size = 14),
+        legend.title = element_text(size = 18),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2))
+
+```
+
+Now let's move to comparison of discrete variables with the price. First we will draw a barplot that shows price distribution for each diamond cut value.
+
+```{r pricecut, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+
+diamonds.big %>% 
+  ggplot(aes(x = cut, y = price, color = cut)) +
+  geom_boxplot(size = 1.3, 
+               outlier.alpha = 1/15, 
+               outlier.size = 5) +
+  scale_y_continuous(breaks = seq(0,20000,2500)) +
+  scale_color_viridis_d(option = "plasma") +
+  xlab("Diamond cut") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price VS cut - boxplot") +
+  coord_flip() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2),
+        legend.position = "none")
+
+```
+
+For the final comparison we use violin plot. The figures below show the distribution of diamond price for each value of diamond color and diamond clarity. 
+
+```{r pricecc, fig.align='center', fig.width=10, fig.height=12, fig.show='asis', echo=FALSE}
+
+violin.color <- diamonds.big %>% 
+  ggplot(aes(y = price, x = color, fill = color)) +
+  geom_violin() +
+  scale_y_continuous(breaks = seq(0,20000,2500)) +
+  scale_fill_viridis_d(option = "plasma") +
+  xlab("Diamond color") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price VS color / clarity - violin plot") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2),
+        legend.position = "none")
+
+violin.clarity <- diamonds.big %>% 
+  ggplot(aes(y = price, x = clarity, fill = clarity)) +
+  geom_violin() +
+  scale_y_continuous(breaks = seq(0,20000,2500)) +
+  scale_fill_viridis_d(option = "inferno") +
+  xlab("Diamond clarity") +
+  ylab("Price (in USD)") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2),
+        legend.position = "none")
+
+cowplot::plot_grid(violin.color, violin.clarity, nrow = 2)
+
+```
+
+
+
+
+
+## Explore many variables
+
+Now we try to map more than two variables to different graphical parameters. The goal is to find any connections between different variables and diamond price.
+
+First let's add volume as color of dots to our scatterplot. From the figure we can observe that diamonds with higher volume tends to have higher price.
+
+
+```{r pricecaratvolume, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+
+diamonds.big %>% 
+  filter(volume <= 1000) %>% # exclude diamonds with extreme volume value
+  ggplot(aes(x = carat, y = price, color = volume)) +
+  geom_point(position = "jitter",
+             size = 1.3) +
+  scale_x_continuous(breaks = seq(0,5,0.5)) +
+  scale_y_continuous(breaks = seq(0,20000,2500)) +
+  scale_color_viridis_c(option = "magma") +
+  xlab("Carat") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price ~ carat ~ volume - scatter plot") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 16),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.5))
+
+```
+
+
+If e replace continuous variable volume with discrete variables for dot color we produce the following figures below. Now we can see how price and carat changes over different values of diamond cut, color and clarity.
+
+
+```{r pricecaratccc, fig.align='center', fig.width=12, fig.height=12, fig.show='asis', echo=FALSE}
+
+cut.subplot <- diamonds.big %>% 
+  ggplot(aes(x = carat, y = price, color = cut)) +
+  geom_point(position = "jitter",
+             size = 1.3) +
+  scale_x_continuous(breaks = seq(0,5,0.5)) +
+  scale_y_continuous(breaks = seq(0,20000,2500)) +
+  scale_color_viridis_d(option = "magma") +
+  xlab("Carat") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price ~ carat ~ cut - scatter plot") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 16),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.5))
+
+color.subplot <- diamonds.big %>% 
+  ggplot(aes(x = carat, y = price, color = color)) +
+  geom_point(position = "jitter",
+             size = 1.3) +
+  scale_x_continuous(breaks = seq(0,5,0.5)) +
+  scale_y_continuous(breaks = seq(0,20000,2500)) +
+  #scale_color_viridis_d(option = "inferno") +
+  xlab("Carat") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price ~ carat ~ color - scatter plot") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 16),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.5))
+
+clarity.subplot <- diamonds.big %>% 
+  ggplot(aes(x = carat, y = price, color = clarity)) +
+  geom_point(position = "jitter",
+             size = 1.3) +
+  scale_x_continuous(breaks = seq(0,5,0.5)) +
+  scale_y_continuous(breaks = seq(0,20000,2500)) +
+  scale_color_viridis_d(option = "inferno") +
+  xlab("Carat") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price ~ carat ~ clarity - scatter plot") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 20),
+        plot.title = element_text(size = 25, face = "bold"),
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 16),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.5))
+
+cowplot::plot_grid(cut.subplot, color.subplot, clarity.subplot,  ncol = 1, nrow = 3)
+
+```
+
+For the last plot we have selected plot with the highest number of variables mapped to plot parameters. Here we map:
+
+* **carat** to *x axis*
+* **price** to *y axis*
+* **volume** to *size of dots*
+* **cut** to *color of dots*
+* **color** and **clarity** are used to create facets using *facet_grid()*
+
+
+```{r pricecaratvolumeccc, fig.align='center', fig.width=12, fig.height=12, fig.show='asis', echo=FALSE}
+
+diamonds.big %>% 
+  filter(volume <= 1000) %>% # exclude diamonds with extreme volume value
+  ggplot(aes(x = carat, y = price, size = volume, color = cut)) +
+  geom_point(position = "jitter") +
+  facet_grid(color ~ clarity, 
+             scales = "free", 
+             labeller = "label_both") +
+  scale_y_continuous(breaks = seq(0,20000,5000)) +
+  scale_size(range = c(0.01, 3)) +
+  scale_color_viridis_d(option = "viridis") +
+  xlab("Carat") +
+  ylab("Price (in USD)") +
+  ggtitle("Diamond price ~ carat ~ volume ~ cut ~ clarity ~ color - scatter plot") +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 16, face = "bold"),
+        strip.background = element_rect(colour = "black", fill = "white"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        strip.text = element_text(size = 10),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.5))
+
+```
+
+
+
+
+# Price prediction models
+
+In the final section of the report we would like to build models for diamond price predictions. Each model will use different variables as predictors (different number of variables and different types of variables). Some guildelines in model building:
+
+* target variable (dependant variable): **price** (no logarithmic transformation applied)
+* selected predictor variables (independantd variables): **carat**, **volume**, **cut**, **color**, **clarity**
+* prediction model: **linear regression model**
+* cross-validation applied: 80% of dataset used for **training**, 20% dataset used for **testing**
+* model performance measure: **Root Means Squared Error** (**RMSE**)
+
+**RMSE** is calculated as:
+
+$$RMSE = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(\hat{y}_i-y_i)^2}$$
+
+where $y_i$ is actual price of diamond $i$ and $\hat{y}_i$ is predicted price of diamond $i$.
+
+
+```{r modelbuilding, echo=FALSE, include=FALSE}
+possible.predictors <- colnames(diamonds.big)[c(1,11,2,3,4)] # possible predictors
+
+# Functions needed
+source("C:/Users/Marko/Desktop/project/functions.R")
+
+# Generate all possible models (with function)
+diamonds.models <- generate.models(predictors.vars = possible.predictors, outcome.var = "price")
+
+# Split sample (with function)
+set.seed(123)
+diamonds.big <- split.sample(diamonds.big)
+diamonds.big.train <- diamonds.big %>% filter(sample == "train")
+diamonds.big.test <- diamonds.big %>% filter(sample == "test")
+
+
+# Train models (train dataset), predict price (test dataset), calculate RMSE (test dataset)
+
+diamonds.models <- diamonds.models %>%# add RMSE column
+  mutate(RMSE = NA)
+
+for(id.model in 1:nrow(diamonds.models)){ # loop over each model
+  
+  # train model
+  formula <- diamonds.models[id.model,"formula"]
+  lm.model <- lm(formula = formula, data = diamonds.big.train)
+  
+  # predict price (test dataset)
+  diamonds.big.test <- diamonds.big.test %>% 
+    mutate(`price predicted` = predict(lm.model, .)) 
+  
+  # calculate RMSE (predicted price VS actual price)
+  SSE <- (diamonds.big.test$`price predicted` - diamonds.big.test$price)^2 # sum of squared errors
+  RMSE <- sqrt(mean(SSE))
+  
+  # write RMSE back to table
+  diamonds.models[id.model,"RMSE"] <- RMSE
+}
+
+```
+
+In the table below we show every model we have built, number of model's predictors, predictors and model performance.
+
+```{r modelstable, include=TRUE, echo=FALSE}
+diamonds.models %>% 
+  select(`nr. predictors`, predictors, RMSE) %>% 
+  kable() %>%
+  kable_styling(full_width = F)
+```
+
+The figure below shows performance of each model.
+
+```{r modelperformance, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+
+predictors.levels <- diamonds.models %>% arrange(id) %>% pull(predictors) # levels for predictors factor variable
+
+diamonds.models %>% 
+  mutate(`nr. predictors` = as.factor(as.character(`nr. predictors`)),
+         predictors = factor(predictors, levels = predictors.levels)) %>% 
+  ggplot(aes(x = predictors, y = RMSE, fill = `nr. predictors`)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_y_continuous(breaks = seq(0, 5000, 500)) +
+  scale_fill_viridis_d() +
+  xlab("Predictors") +
+  ylab("RMSE") +
+  ggtitle("Price prediction model performance") +
+  theme(axis.text = element_text(size = 12),
+        axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 16, face = "bold"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.5))
+
+```
+
+
+
+
+
+
+
+
+
+

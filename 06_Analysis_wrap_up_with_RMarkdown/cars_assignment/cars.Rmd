@@ -1,0 +1,412 @@
+---
+title: "Cars"
+author: "Marko Intihar"
+date: "10/03/2020"
+output: 
+  html_document:
+    css: template1.css
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+---
+
+# Introduction
+
+This report covers inspection of the **cars dataset** (**mpg**) from the **ggplot2** library. The content covers:
+
+* quick dataset exploration
+* exploratory data analysis
+* car highway miles consumption prediction modelling
+
+
+# The Dataset
+
+```{r data, echo=FALSE, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(cowplot)
+library(hexbin)
+
+library(kableExtra)
+
+# data
+df <- ggplot2::mpg
+str(df) # table structure
+
+df <- df %>% 
+  mutate(manufacturer = as.factor(manufacturer),
+         model = as.factor(model),
+         trans = as.factor(trans),
+         drv = as.factor(drv),
+         fl = as.factor(fl),
+         class = as.factor(class),
+         cyl = as.factor(cyl))
+
+```
+
+Dataset preview:
+
+```{r data look, echo=TRUE, include=TRUE}
+# structure
+str(df)
+
+# summary
+summary(df)
+
+# data frame dimensions
+nrow(df)
+ncol(df)
+
+# pre-look
+head(df)
+
+```
+
+
+# Exploratory Data Analysis (EDA)
+
+In this report we try to explore the given cars dataset. By considering:
+
+* each individual variable;
+* two variables and their connection;
+* many variables;
+
+
+## Explore each individual variable
+
+Dataset includes given variables:
+
+* **manufacturer** - car manufacturer;
+* **model** - car model;
+* **displ** - engine displacement in litres;
+* **year** - year of manufacture;
+* **cyl** - number of cylinders;
+* **trans** - type of transmission;
+* **drv** - type of wheel drive;
+* **cty** - city miles per gallon consumption;
+* **hwy** - highway miles per gallon consumption;
+* **fl** - fuel type;
+* **class** - type of car;
+
+Figure below shows distribution of variables **hwy** and **cty**.
+
+```{r ctyhwy, fig.align='center', fig.width=12, fig.height=10, fig.show='asis', echo=FALSE}
+# cty histogram for exporting
+fig.cty <- df %>% 
+  ggplot(aes(x = cty)) +
+  geom_histogram(binwidth = 1, color = "black", fill = "gray40") +
+  scale_x_continuous(breaks = seq(0,50,2)) +
+  scale_y_continuous(breaks = seq(0,30,2)) +
+  xlab("City miles per gallon") +
+  ylab("Frequency") +
+  ggtitle("City and Highway miles per gallon - histograms") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+# hwy histogram for exporting
+fig.hwy <- df %>% 
+  ggplot(aes(x = hwy)) +
+  geom_histogram(binwidth = 1, color = "black", fill = "gray40") +
+  scale_x_continuous(breaks = seq(0,50,2)) +
+  scale_y_continuous(breaks = seq(0,40,2)) +
+  xlab("Highway miles per gallon") +
+  ylab("Frequency") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+cowplot::plot_grid(fig.cty, fig.hwy, ncol = 1)
+
+```
+
+Distribution of continuous variable **displ** is presented with a frequency polygon.
+
+
+```{r displ, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+df %>% 
+  ggplot(aes(x = displ)) +
+  geom_freqpoly(binwidth = 0.2, size = 1.2, color = "black") +
+  scale_x_continuous(breaks = seq(0,8,0.2)) +
+  scale_y_continuous(breaks = seq(0,40,5)) +
+  xlab("Displacement in litres") +
+  ylab("Frequency") +
+  ggtitle("Engine displacement - frequency polygon") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+```
+
+Selected discrete variables are drawn using bar plot.
+
+```{r discrete, fig.align='center', fig.width=12, fig.height=12, fig.show='asis', echo=FALSE}
+
+fig.manufact <- df %>% 
+  ggplot(aes(x = manufacturer)) +
+  geom_bar(stat = "count", fill = "gray60", color = "black") +
+  scale_y_continuous(breaks = seq(0,50,5)) +
+  xlab("Car manufacturer") +
+  ylab("Car count") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+fig.cyl <- df %>% 
+  ggplot(aes(x = cyl)) +
+  geom_bar(stat = "count", fill = "gray60", color = "black") +
+  scale_y_continuous(breaks = seq(0,90,10)) +
+  xlab("Number of cylinders") +
+  ylab("Car count") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+fig.trans <- df %>% 
+  ggplot(aes(x = trans)) +
+  geom_bar(stat = "count", fill = "gray60", color = "black") +
+  scale_y_continuous(breaks = seq(0,90,10)) +
+  xlab("Transmission type") +
+  ylab("Car count") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+fig.fl <- df %>% 
+  ggplot(aes(x = fl)) +
+  geom_bar(stat = "count", fill = "gray60", color = "black") +
+  scale_y_continuous(breaks = seq(0,200,25)) +
+  xlab("Fuel type") +
+  ylab("Car count") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"))
+
+first_row <- cowplot::plot_grid(fig.manufact, nrow = 1)
+second_row <- cowplot::plot_grid(fig.trans, nrow = 1)
+third_row <- cowplot::plot_grid(fig.fl, fig.cyl, nrow = 1)
+
+cowplot::plot_grid(first_row, second_row, third_row, 
+                                  ncol = 1, nrow = 3)
+
+```
+
+
+## Explore two variables
+
+
+Now we will compare **hwy** with selected variables. Let's begin by comparing **hwy** with **cty**.
+
+```{r hwycty, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+df %>% 
+  ggplot(aes(x = cty, y = hwy)) +
+  geom_point(size = 5, color = "black") +
+  geom_smooth(method = "lm", se = T) +
+  scale_x_continuous(breaks = seq(0,40,2.5)) +
+  scale_y_continuous(breaks = seq(0,50,2.5)) +
+  xlab("City miles per gallon") +
+  ylab("Highway miles per gallon") +
+  ggtitle("City VS Highway miles per gallon - scatter plot") +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2))
+
+```
+
+If we compare **hwy** with **displ** using hexagonal heatmap.
+
+```{r hwydispl, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+df %>% 
+  ggplot(aes(y = hwy, x = displ)) +
+  geom_hex(binwidth = c(0.25,2)) +
+  scale_x_continuous(breaks = seq(0,10,0.5)) +
+  scale_y_continuous(breaks = seq(0,50,5)) +
+  scale_fill_viridis_c(option = "magma") +
+  xlab("Engine displacement (in litres)") +
+  ylab("Highway miles per gallon") +
+  ggtitle("Highway miles VS engine displacement - Hexagonal heatmap 2D") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 18, face = "bold"),
+        legend.text = element_text(size = 14),
+        legend.title = element_text(size = 16),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2))
+
+```
+
+**hwy** with **manufacturer**:
+
+```{r hwymanufact, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+df %>% 
+  ggplot(aes(y = hwy, x = manufacturer, fill = manufacturer)) +
+  geom_boxplot(size = 1.3, 
+               outlier.size = 5) +
+  geom_jitter(color = "gray40", size = 2) +
+  scale_y_continuous(breaks = seq(0,50,5)) +
+  scale_fill_viridis_d(option = "plasma") +
+  xlab("Car manufacturer") +
+  ylab("Highway miles per gallon") +
+  ggtitle("Highway miles VS car manufacturer - boxplot") +
+  coord_flip() +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 18, face = "bold"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2),
+        legend.position = "none")
+
+```
+
+**hwy** with **class**:
+
+```{r hwyclass, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+df %>% 
+  ggplot(aes(y = hwy, x = class, fill = class)) +
+  geom_violin() +
+  geom_jitter(color = "gray40", size = 2) +
+  scale_y_continuous(breaks = seq(0,50,5)) +
+  scale_fill_viridis_d(option = "viridis") +
+  xlab("Car type") +
+  ylab("Highway miles per gallon") +
+  ggtitle("Highway miles VS car type - violin plot") +
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 18, face = "bold"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2),
+        legend.position = "none")
+
+```
+
+
+## Explore many variables
+
+Figure below uses different variables for many plot elements:
+
+* **cty** mapped on *x axis*
+* **hwy** mapped on *y axis*
+* **cyl** mapped on dot color
+* **drv** mapped on shape of dots
+* **fl** used for creating facets
+
+```{r manyvars, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+df %>% 
+  ggplot(aes(x = cty, y = hwy, color = cyl, shape = drv)) +
+  geom_point(position = "jitter", size = 5) +
+  facet_wrap(vars(fl), labeller = "label_both") +
+  scale_size(range = c(0.01,10)) +
+  scale_x_continuous(breaks = seq(0,60,5)) +
+  scale_y_continuous(breaks = seq(0,60,5)) +
+  xlab("City miles per gallon") +
+  ylab("Highway miles per gallon") +
+  ggtitle("Hwy ~ Cty ~ cyl ~ drv ~ fl - scatter plot") +
+  theme_bw() +
+  theme(axis.text = element_text(size = 16),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
+        legend.title = element_text(size = 16),
+        legend.text =  element_text(size = 12),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.2),
+        strip.background = element_rect(colour = "black", fill = "white"),
+        strip.text = element_text(size = 14))
+
+```
+
+
+# Highway miles prediction models
+
+In the final section of the report we would like to build models for car highway miles consumption predictions. Each model will use different variables as predictors (different number of variables and different types of variables). Some guildelines in model building:
+
+* target variable (dependant variable): **hwy** 
+* selected predictor variables (independantd variables): **cty**, **displ**, **cyl**, **drv**, **fl**
+* prediction model: **linear regression model**
+* cross-validation applied: 80% of dataset used for **training**, 20% dataset used for **testing**
+* model performance measure: **Root Means Squared Error** (**RMSE**)
+
+**RMSE** is calculated as:
+
+$$RMSE = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(\hat{y}_i-y_i)^2}$$
+
+where $y_i$ is actual highway consumption of car $i$ and $\hat{y}_i$ is predicted highway consumption value of car $i$.
+
+
+```{r modelbuilding, echo=FALSE, include=FALSE}
+
+# Functions needed
+source("C:/Users/Marko/Desktop/project/functions.R")
+
+# Generate df for models
+predictor.vars <- c("cty", "displ", "cyl", "drv", "fl")
+predicted.var <- "hwy"
+cars.models <- generate.models(predictors.vars = predictor.vars, outcome.var = predicted.var)
+
+# Split df
+set.seed(123)
+df <- split.sample(df = df, train.size = 0.8)
+df.train <- df %>% filter(sample == "train")
+df.test <- df %>% filter(sample == "test")
+
+# Fit models and calculate RMSE
+
+cars.models <- cars.models %>% # add RMSE column
+  mutate(RMSE = NA)
+
+for(id.model in 1:nrow(cars.models)){ # loop over each model
+  
+  # train model
+  formula <- cars.models[id.model,"formula"]
+  lm.model <- lm(formula = formula, data = df.train)
+  
+  # predict price (test dataset)
+  df.test <- df.test %>% 
+    mutate(`hwy predicted` = predict(lm.model, .)) 
+  
+  # calculate RMSE (predicted price VS actual price)
+  SSE <- (df.test$`hwy predicted` - df.test$hwy)^2 # sum of squared errors
+  RMSE <- sqrt(mean(SSE))
+  
+  # write RMSE back to table
+  cars.models[id.model,"RMSE"] <- RMSE
+}
+
+
+```
+
+In the table below we show every model we have built, number of model's predictors, predictors and model performance.
+
+```{r modelstable, include=TRUE, echo=FALSE}
+cars.models %>% 
+  select(`nr. predictors`, predictors, RMSE) %>% 
+  kable() %>%
+  kable_styling(full_width = F)
+```
+
+The figure below shows performance of each model.
+
+```{r modelperformance, fig.align='center', fig.width=12, fig.height=8, fig.show='asis', echo=FALSE}
+
+predictors.levels <- cars.models %>% arrange(id) %>% pull(predictors) # levels for predictors factor variable
+
+cars.models %>% 
+  mutate(`nr. predictors` = as.factor(as.character(`nr. predictors`)),
+         predictors = factor(predictors, levels = predictors.levels)) %>% 
+  ggplot(aes(x = predictors, y = RMSE, fill = `nr. predictors`)) +
+  geom_bar(stat = "identity", color = "black") +
+  scale_y_continuous(breaks = seq(0, 5, 0.25)) +
+  scale_fill_viridis_d(option = "inferno", direction = -1) +
+  xlab("Predictors") +
+  ylab("RMSE") +
+  ggtitle("Highway miles prediction model performance") +
+  theme(axis.text = element_text(size = 12),
+        axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 16, face = "bold"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        panel.border = element_rect(color = "black", fill = NA, size = 1.5))
+
+```
+
+
+
+
